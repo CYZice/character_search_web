@@ -129,23 +129,35 @@ def import_from_output():
     # 导入数据库并复制文件
     db = SessionLocal()
     try:
-        total_images = 0
+        total_new_chars = 0
+        total_new_images = 0
+        total_skipped = 0
 
         for char, images in sorted(char_images.items()):
-            print(f"\n处理汉字: 【{char}】 ({len(images)} 张图片)")
-
-            # 创建或更新Character记录
+            # 获取或创建 Character 记录
             db_char = crud.get_character_by_name(db, char)
             if db_char is None:
                 db_char = crud.create_character(db, char)
+                total_new_chars += 1
+                print(f"\n新增汉字: 【{char}】 ({len(images)} 张图片)")
             else:
-                crud.delete_character_images(db, db_char.id)
+                print(f"\n更新汉字: 【{char}】")
+
+            # 获取该汉字已有的图片出处（用于去重）
+            existing_sources = {img.source_text for img in db_char.images}
+            next_order = len(db_char.images)  # 追加到现有图片之后
 
             # 创建图片目录
             char_dir = DATA_DIR / char
             char_dir.mkdir(exist_ok=True)
 
-            for idx, (img_rel_path, source) in enumerate(images):
+            new_count = 0
+            for (img_rel_path, source) in images:
+                # 去重：检查该出处是否已存在
+                if source in existing_sources:
+                    total_skipped += 1
+                    continue
+
                 # 源文件
                 src_path = OUTPUT_DIR / img_rel_path
                 if not src_path.exists():
@@ -153,7 +165,7 @@ def import_from_output():
 
                 # 目标文件命名: {字}_{出处}_{序号}.jpg
                 safe_source = re.sub(r'[<>:"/\\|?*]', '_', source)[:50] if source else "无出处"
-                filename = f"{char}_{safe_source}_{idx+1:03d}.jpg"
+                filename = f"{char}_{safe_source}_{next_order+1:03d}.jpg"
                 dest_path = char_dir / filename
 
                 # 复制文件
@@ -168,14 +180,21 @@ def import_from_output():
                     db_char.id,
                     rel_path,
                     source,
-                    idx
+                    next_order
                 )
-                total_images += 1
+                existing_sources.add(source)  # 防止同一批次内重复
+                next_order += 1
+                new_count += 1
+                total_new_images += 1
+
+            if new_count > 0:
+                print(f"  -> 新增 {new_count} 张图片")
 
         db.commit()
         print(f"\n导入完成!")
-        print(f"共 {len(char_images)} 个汉字")
-        print(f"共 {total_images} 张图片")
+        print(f"新增汉字: {total_new_chars} 个")
+        print(f"新增图片: {total_new_images} 张")
+        print(f"跳过(已存在): {total_skipped} 张")
         print(f"数据目录: {DATA_DIR}")
 
     finally:
