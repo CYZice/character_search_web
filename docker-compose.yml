@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  character_search:
+    image: ${IMAGE_NAME:-character_search:latest}
+    container_name: character_search
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "35827:8001"
+    volumes:
+      - ./data:/app/data
+      - ./templates:/app/templates:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
