@@ -13,7 +13,6 @@ services:
       - "35827:8001"
     volumes:
       - ./data:/app/data
-      - ./templates:/app/templates:ro
     logging:
       driver: "json-file"
       options:
