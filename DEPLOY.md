@@ -23,14 +23,17 @@ make save
 #### 3. 上传到服务器
 
 ```bash
-scp character_search.tar.gz root@139.196.90.36:~/
+scp character_search.tar.gz root@139.196.90.36:/root/
 ```
 
-#### 4. 服务器上加载镜像
+#### 4. 服务器上解压并加载镜像
 
 ```bash
 ssh root@139.196.90.36
-gunzip -c character_search.tar.gz | docker load
+cd /root
+tar -xzf character_search.tar.gz
+cd character_search_web
+gunzip -c ../character_search.tar.gz | docker load
 ```
 
 #### 5. 启动服务
@@ -59,6 +62,7 @@ make push REGISTRY=registry.cn-hangzhou.aliyuncs.com/你的命名空间
 
 ```bash
 ssh root@139.196.90.36
+cd /root/character_search_web
 docker compose pull
 docker compose up -d
 ```
@@ -71,7 +75,7 @@ docker compose up -d
 
 ```bash
 # 在有数据的机器上
-rsync -avz --progress data/ root@139.196.90.36:~/character_search_web/data/
+rsync -avz --progress data/ root@139.196.90.36:/root/character_search_web/data/
 ```
 
 ---
@@ -87,16 +91,16 @@ rsync -avz --progress data/ root@139.196.90.36:~/character_search_web/data/
 
 ```bash
 # 查看日志
-docker compose logs -f
+cd /root/character_search_web && docker compose logs -f
 
 # 重启服务
-docker compose restart
+cd /root/character_search_web && docker compose restart
 
 # 停止服务
-docker compose down
+cd /root/character_search_web && docker compose down
 
 # 更新重启
-git pull && docker compose up -d --build
+cd /root/character_search_web && git pull && docker compose up -d --build
 ```
 
 ---
