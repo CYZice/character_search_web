@@ -11,8 +11,7 @@ services:
       - PYTHONUNBUFFERED=1
     ports:
       - "35827:8001"
-    volumes:
-      - ./data:/app/data
+    # 数据已在镜像内，无需挂载
     logging:
       driver: "json-file"
       options:
