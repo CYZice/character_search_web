@@ -51,19 +51,70 @@ def flatten(lst):
     return result
 
 
-def import_from_output():
-    """从output目录导入"""
-    if not OUTPUT_DIR.exists():
-        print(f"输出目录不存在: {OUTPUT_DIR}")
-        return
+def import_from_output_v4():
+    """V4 格式导入 - 处理 MinerU v4 API 返回的 JSON"""
+    import glob
 
+    char_images = {}  # {char: [(image_path, source_text), ...]}
+    current_char = None
+    pending_image = None
+
+    # 处理所有 *_content_list.json 文件
+    json_files = sorted(OUTPUT_DIR.glob("*_content_list.json"))
+    print(f"找到 {len(json_files)} 个 JSON 文件")
+
+    for json_file in json_files:
+        print(f"处理: {json_file.name}")
+        with open(json_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        for block in data:
+            block_type = block.get("type", "")
+
+            # V4 格式: text_level=1 是标题
+            if block_type == "text" and block.get("text_level") == 1:
+                text = block.get("text", "")
+                if is_valid_char_title(text):
+                    # 处理上一个字的暂存图片
+                    if pending_image and current_char:
+                        if current_char not in char_images:
+                            char_images[current_char] = []
+                        char_images[current_char].append(pending_image)
+                        pending_image = None
+
+                    current_char = text[1:-1]
+                    if current_char not in char_images:
+                        char_images[current_char] = []
+
+            elif block_type == "image" and current_char:
+                img_path = block.get("img_path", "")
+                if img_path:
+                    pending_image = (img_path, "")
+
+            elif block_type == "text" and block.get("text_level") is None and pending_image:
+                source = block.get("text", "").strip()
+                if source:
+                    pending_image = (pending_image[0], source)
+                    if current_char:
+                        char_images[current_char].append(pending_image)
+                    pending_image = None
+
+    # 处理最后一个暂存图片
+    if pending_image and current_char:
+        if current_char not in char_images:
+            char_images[current_char] = []
+        char_images[current_char].append(pending_image)
+
+    print(f"找到 {len(char_images)} 个汉字")
+    return char_images
+
+
+def import_from_output_v2():
+    """V2 格式导入 - 处理旧版 content_list_v2.json"""
     json_path = OUTPUT_DIR / "content_list_v2.json"
     if not json_path.exists():
         print(f"JSON文件不存在: {json_path}")
-        return
-
-    # 创建data目录
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+        return None
 
     # 读取JSON
     print("读取JSON...")
@@ -125,6 +176,30 @@ def import_from_output():
         char_images[current_char].append(pending_image)
 
     print(f"找到 {len(char_images)} 个汉字")
+    return char_images
+
+
+def import_from_output():
+    """从output目录导入"""
+    if not OUTPUT_DIR.exists():
+        print(f"输出目录不存在: {OUTPUT_DIR}")
+        return
+
+    # 创建data目录
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 检测格式：优先使用 V4 格式（*_content_list.json 文件）
+    v4_files = list(OUTPUT_DIR.glob("*_content_list.json"))
+    if v4_files:
+        print("检测到 V4 格式 JSON，使用 V4 导入逻辑")
+        char_images = import_from_output_v4()
+    else:
+        print("使用 V2 格式导入")
+        char_images = import_from_output_v2()
+
+    if not char_images:
+        print("没有找到汉字数据")
+        return
 
     # 导入数据库并复制文件
     db = SessionLocal()
@@ -137,14 +212,14 @@ def import_from_output():
             # 获取或创建 Character 记录
             db_char = crud.get_character_by_name(db, char)
             if db_char is None:
-                db_char = crud.create_character(db, char)
+                db_char = crud.get_or_create_character(db, char)
                 total_new_chars += 1
                 print(f"\n新增汉字: 【{char}】 ({len(images)} 张图片)")
             else:
                 print(f"\n更新汉字: 【{char}】")
 
-            # 获取该汉字已有的图片出处（用于去重）
-            existing_sources = {img.source_text for img in db_char.images}
+            # 获取该汉字已有的图片路径（用于去重）
+            existing_paths = {img.image_path for img in db_char.images}
             next_order = len(db_char.images)  # 追加到现有图片之后
 
             # 创建图片目录
@@ -153,8 +228,8 @@ def import_from_output():
 
             new_count = 0
             for (img_rel_path, source) in images:
-                # 去重：检查该出处是否已存在
-                if source in existing_sources:
+                # 去重：检查该图片路径是否已存在
+                if img_rel_path in existing_paths:
                     total_skipped += 1
                     continue
 
@@ -182,7 +257,7 @@ def import_from_output():
                     source,
                     next_order
                 )
-                existing_sources.add(source)  # 防止同一批次内重复
+                existing_paths.add(rel_path)  # 防止同一批次内重复
                 next_order += 1
                 new_count += 1
                 total_new_images += 1
@@ -202,4 +277,9 @@ def import_from_output():
 
 
 if __name__ == "__main__":
+    import sys
+    # 支持外部指定OUTPUT_DIR
+    if len(sys.argv) > 1:
+        output_dir = Path(sys.argv[1])
+        OUTPUT_DIR = output_dir
     import_from_output()

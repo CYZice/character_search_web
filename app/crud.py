@@ -24,6 +24,25 @@ def get_all_characters_with_counts(db: Session):
     )
 
 
+def get_or_create_character(db: Session, character: str, description: str = None):
+    """获取或创建字符，处理并发重复插入"""
+    db_char = get_character_by_name(db, character)
+    if db_char is not None:
+        return db_char
+    try:
+        db_char = models.Character(character=character, description=description)
+        db.add(db_char)
+        db.commit()
+        db.refresh(db_char)
+        return db_char
+    except Exception:
+        db.rollback()
+        db_char = get_character_by_name(db, character)
+        if db_char is None:
+            raise
+        return db_char
+
+
 def create_character(db: Session, character: str, description: str = None):
     db_char = models.Character(character=character, description=description)
     db.add(db_char)
