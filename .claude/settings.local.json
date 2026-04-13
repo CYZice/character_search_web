@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf \"D:\\\\Microsoft VS Code\\\\lidan\\\\character_search\\\\test_output_v4\")",
+      "Bash(python test_mineru_v4.py)",
+      "Bash(rm -rf \"D:\\\\Microsoft VS Code\\\\lidan\\\\character_search\\\\output\")",
+      "Bash(python extract_char_images.py)",
+      "Bash(rm:*)",
+      "Bash(taskkill //F //IM python.exe)"
+    ]
+  }
+}
