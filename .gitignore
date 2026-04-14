@@ -30,3 +30,7 @@ Thumbs.db
 
 # Docker
 *.tar.gz
+
+# Data files
+char_statistics.json
+*.7z
