@@ -94,7 +94,7 @@ make push REGISTRY=registry.cn-hangzhou.aliyuncs.com/你的命名空间
 
 ```bash
 ssh root@139.196.90.36
-cd /root/character_search_web
+cd /root/character_search
 docker compose pull
 docker compose up -d
 ```
