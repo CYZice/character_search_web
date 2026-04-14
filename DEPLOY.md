@@ -94,6 +94,7 @@ make push REGISTRY=registry.cn-hangzhou.aliyuncs.com/你的命名空间
 
 ```bash
 ssh root@139.196.90.36
+cd /root/character_search_web
 docker compose pull
 docker compose up -d
 ```
@@ -119,16 +120,16 @@ rsync -avz --progress data/ root@139.196.90.36:/root/character_search/data/
 
 ```bash
 # 查看日志
-docker compose logs -f
+cd /root/character_search && docker compose logs -f
 
 # 查看状态
 docker compose ps
 
 # 重启服务
-docker compose restart
+cd /root/character_search && docker compose restart
 
 # 停止服务
-docker compose down
+cd /root/character_search && docker compose down
 
 # 更新部署（从 git）
 git pull
