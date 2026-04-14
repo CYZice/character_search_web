@@ -15,18 +15,15 @@
 - **端口**: 35827
 - **访问**: http://139.196.90.36:35827
 
-## 目录结构
-
-服务器上使用统一的项目目录：
+## 服务器目录结构
 
 ```
-/root/character_search/     # 项目根目录
-├── app/                   # 应用代码
-├── data/                  # 数据目录（图片 + SQLite 数据库）
-├── templates/             # 前端模板
-├── docker-compose.yml     # 容器编排配置
-└── .env                   # 环境变量（敏感信息）
+/root/character_search/     # 项目根目录（只需这两个文件/目录）
+├── docker-compose.yml       # 容器编排配置
+└── data/                   # 数据目录（图片 + SQLite 数据库）
 ```
+
+> 注意：所有代码已打包在 Docker 镜像中，无需在服务器存放代码。
 
 ## 部署方式
 
@@ -35,19 +32,14 @@
 #### 1. 本地构建并打包
 
 ```bash
-cd D:\Microsoft VS Code\lidan\character_search
-
-# 构建镜像
-docker build -t character_search:latest .
-
-# 打包
-docker save character_search:latest | gzip > character_search.tar.gz
+make build
+make save
 ```
 
 #### 2. 上传到服务器
 
 ```bash
-scp character_search.tar.gz docker-compose.yml root@139.196.90.36:/root/character_search/
+scp character_search.tar.gz root@139.196.90.36:/root/character_search/
 ```
 
 > 注意：首次部署需要先在服务器上创建目录：
@@ -110,7 +102,7 @@ docker compose up -d
 - 汉字图片文件
 
 ```bash
-# 在有数据的机器上执行
+# 在有数据的机器上执行（将 data 目录同步到服务器）
 rsync -avz --progress data/ root@139.196.90.36:/root/character_search/data/
 ```
 
@@ -131,9 +123,13 @@ cd /root/character_search && docker compose restart
 # 停止服务
 cd /root/character_search && docker compose down
 
-# 更新部署（从 git）
-git pull
-docker compose up -d --build
+# 更新部署（重新打包上传）
+# 1. 本地重新打包
+make build && make save
+# 2. 上传
+scp character_search.tar.gz root@139.196.90.36:/root/character_search/
+# 3. 服务器加载并重启
+ssh root@139.196.90.36 "cd /root/character_search && gunzip -c character_search.tar.gz | docker load && docker compose up -d --force-recreate"
 ```
 
 ---
@@ -158,15 +154,14 @@ set -e
 
 cd /root/character_search
 
-echo "=== 拉取最新代码 ==="
-git pull
+echo "=== 停止旧容器 ==="
+docker compose down
 
-echo "=== 同步 data 目录 ==="
-# 如果有本地数据需要同步
-# rsync -avz --progress data/ root@139.196.90.36:/root/character_search/data/
+echo "=== 加载新镜像 ==="
+gunzip -c character_search.tar.gz | docker load
 
-echo "=== 构建并启动 ==="
-docker compose up -d --build
+echo "=== 启动服务 ==="
+docker compose up -d
 
 echo "=== 检查状态 ==="
 docker compose ps

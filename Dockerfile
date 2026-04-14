@@ -18,6 +18,6 @@ COPY . .
 # 使用 gunicorn 多worker + uvicorn workers
 RUN pip install --no-cache-dir gunicorn
 
-EXPOSE 35827
+EXPOSE 8001
 
 CMD ["gunicorn", "--bind", "0.0.0.0:8001", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "app.main:app"]
