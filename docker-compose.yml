@@ -9,11 +9,13 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/characters.db}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports:
       - "35827:8001"
     volumes:
-      - ./data:/app/data
       - ./templates:/app/templates:ro
+      - ./data:/app/data
     logging:
       driver: "json-file"
       options:

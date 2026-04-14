@@ -13,9 +13,6 @@ COPY --from=builder /install /usr/local
 
 RUN pip install --no-cache-dir --upgrade "wheel>=0.46.2"
 
-# 预先创建 data 目录（卷挂载点）
-RUN mkdir -p /app/data
-
 COPY . .
 
 # 使用 gunicorn 多worker + uvicorn workers
