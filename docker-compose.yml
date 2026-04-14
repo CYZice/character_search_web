@@ -14,7 +14,6 @@ services:
     ports:
       - "35827:8001"
     volumes:
-      - ./templates:/app/templates:ro
       - ./data:/app/data
     logging:
       driver: "json-file"
