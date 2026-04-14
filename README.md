@@ -1,16 +1,100 @@
 # 汉字字形检索系统
 
+## 项目简介
+
+基于 FastAPI 的汉字字形检索系统，用于辽代汉文石刻文字研究。
+
 ## 目录结构
 
 ```
 character_search/
 ├── app/              # 后端 (FastAPI)
-├── data/             # 最终数据 (图片 + 数据库)
+├── data/             # 数据目录（图片 + SQLite 数据库）
 ├── output/           # MinerU 输出目录 (临时)
 ├── scripts/          # 导入脚本
-├── templates/        # 前端 (Vue.js)
+├── templates/        # 前端模板
 ├── process_pdf.py    # PDF 处理脚本
-└── requirements.txt
+├── requirements.txt  # Python 依赖
+├── Dockerfile        # Docker 镜像构建
+├── docker-compose.yml # 容器编排
+└── DEPLOY.md         # 部署文档
+```
+
+## 本地开发
+
+### 1. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 启动服务
+
+```bash
+uvicorn app.main:app --port 8001
+```
+
+浏览器访问：**http://127.0.0.1:8001**
+
+### 3. API 测试
+
+```bash
+# 查看所有汉字
+curl http://127.0.0.1:8001/api/characters
+
+# 搜索特定汉字
+curl http://127.0.0.1:8001/api/characters/一
+```
+
+## Docker 部署
+
+### 服务器信息
+
+| 项目 | 值 |
+|------|-----|
+| 公网 IP | 139.196.90.36 |
+| 私有 IP | 172.24.49.66 |
+| SSH 用户 | root |
+| 服务端口 | 35827 |
+
+访问地址：**http://139.196.90.36:35827**
+
+### 部署流程
+
+详见 [DEPLOY.md](DEPLOY.md)
+
+#### 快速部署
+
+```bash
+# 1. 本地构建并打包
+make build
+make save
+
+# 2. 上传到服务器
+make upload
+# 输入密码: f+9WS9t5Bx9&9Xj
+
+# 3. 服务器上加载并启动
+ssh root@139.196.90.36
+cd /root/character_search
+gunzip -c character_search.tar.gz | docker load
+docker compose up -d
+```
+
+#### 更新部署
+
+```bash
+# 服务器上执行
+cd /root/character_search
+git pull
+docker compose up -d --build
+```
+
+### 数据同步
+
+```bash
+# 同步 data 目录（包含数据库和图片）
+rsync -avz --progress data/ root@139.196.90.36:/root/character_search/data/
 ```
 
 ## 工作流程
@@ -19,7 +103,7 @@ character_search/
 PDF → MinerU API → output/ → data/ → 前端显示
 ```
 
-## 1. 处理 PDF 文件
+### 1. 处理 PDF 文件
 
 修改 `process_pdf.py` 中的 PDF 路径：
 
@@ -32,12 +116,7 @@ PDF_PATH = r"你的PDF路径\xxx.pdf"
 python process_pdf.py
 ```
 
-这会：
-- 上传 PDF 到 MinerU
-- 下载结果到 `output/` 目录
-- 解析 458 页（可能需要几分钟）
-
-## 2. 导入数据到数据库
+### 2. 导入数据到数据库
 
 ```bash
 python scripts/import_content_list.py
@@ -49,50 +128,21 @@ python scripts/import_content_list.py
 - 复制图片到 `data/{汉字}/` 目录
 - 导入数据库 `data/characters.db`
 
-当前数据：**714 个汉字，11646 张图片**
+## 数据库查询
 
-## 3. 启动前后端
-
-```bash
-cd D:\Microsoft VS Code\lidan\character_search
-uvicorn app.main:app --port 8001
-```
-
-然后浏览器访问：**http://127.0.0.1:8001**
-
-## 4. 常用操作
-
-### 查看所有汉字
-```bash
-curl http://127.0.0.1:8001/api/characters
-```
-
-### 搜索特定汉字
-```bash
-curl http://127.0.0.1:8001/api/characters/一
-```
-
-### 查看数据库
 ```bash
 sqlite3 data/characters.db "SELECT character, (SELECT COUNT(*) FROM character_images WHERE character_id = characters.id) as cnt FROM characters ORDER BY character;"
 ```
 
-### 重新导入（会清空旧数据）
+## 服务管理
+
 ```bash
-# 1. 删除数据库
-del data\characters.db
+# 查看日志
+docker compose logs -f
 
-# 2. 重新导入
-python scripts/import_content_list.py
+# 重启服务
+docker compose restart
+
+# 停止服务
+docker compose down
 ```
-
-## 与 search_web 集成
-
-在 `search_web/app/main.py` 中添加：
-
-```python
-from character_search.app.main import app as char_app
-app.mount("/char", char_app)
-```
-
-访问：**http://127.0.0.1:8000/char**

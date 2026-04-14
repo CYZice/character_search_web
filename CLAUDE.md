@@ -2,47 +2,89 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## 项目概览
 
-This repository contains scripts to parse PDFs using the MinerU API and extract character-to-image mappings for Chinese stone inscription research (遼代漢文石刻文字研究).
+辽代汉文石刻文字研究 - 汉字字形检索系统。
 
-## Scripts
+## 项目结构
 
-| File | Purpose |
-|------|---------|
-| `test_mineru.py` | Uses MinerU v1 API (`https://mineru.net/api/v1/agent`) to parse PDFs |
-| `test_mineru_v4.py` | Uses MinerU v4 API (`https://mineru.net/api/v4`) for batch PDF parsing |
-| `extract_char_images.py` | Utility for extracting character images |
+```
+character_search/
+├── app/              # FastAPI 后端
+├── data/             # 数据（SQLite 数据库 + 汉字图片）
+├── output/           # MinerU 处理结果临时目录
+├── scripts/          # 数据导入脚本
+├── templates/        # 前端模板
+├── Dockerfile        # Docker 镜像构建
+├── docker-compose.yml # 容器编排
+├── Makefile          # 部署命令
+├── DEPLOY.md         # 部署文档
+└── README.md         # 项目文档
+```
 
-## PDF Format
+## 部署相关
 
-The target PDFs have a **two-column layout**:
-- Each column starts with a character title enclosed in 【】
-- Followed by vertically stacked images belonging to that character
-- Reading order: left column top-to-bottom, then right column
+### 服务器信息
 
-## Running Scripts
+- 公网 IP: 139.196.90.36
+- 私有 IP: 172.24.49.66
+- 用户: root
+- 密码: `f+9WS9t5Bx9&9Xj`
+- 服务端口: 35827
+
+### 部署命令
 
 ```bash
-# Run v1 API test
-python test_mineru.py
+# 本地构建打包
+make build
+make save
 
-# Run v4 API test
-python test_mineru_v4.py
+# 上传到服务器
+make upload
+
+# 服务器加载启动
+ssh root@139.196.90.36
+cd /root/character_search
+gunzip -c character_search.tar.gz | docker load
+docker compose up -d
 ```
 
-## Configuration
+### 数据同步
 
-Scripts contain hardcoded local paths and API tokens:
-- `PDF_PATH`: Source PDF location
-- `OUTPUT_DIR`: Extraction output directory
-- `TOKEN`: MinerU API bearer token (already configured)
-- `BASE_URL`: MinerU API endpoint
-
-## Architecture
-
-```
-MinerU API → Parse PDF → Download ZIP → Extract → content_list_v2.json → Character-Image Mapping
+```bash
+rsync -avz --progress data/ root@139.196.90.36:/root/character_search/data/
 ```
 
-The `content_list_v2.json` contains nested block structures with `title` and `image` block types. The mapping logic associates images with the preceding title character until the next title appears.
+## 工作流程
+
+```
+PDF → MinerU API → output/ → data/ → 前端显示
+```
+
+## PDF 格式
+
+目标 PDFs 采用**双栏布局**：
+- 每栏以【】包围的汉字标题开头
+- 随后是该汉字的垂直堆叠图片
+- 阅读顺序：左栏从上到下，然后右栏
+
+## MinerU API
+
+- v1 API: `https://mineru.net/api/v1/agent`
+- v4 API: `https://mineru.net/api/v4`
+
+## 主要脚本
+
+| 文件 | 用途 |
+|------|------|
+| `process_pdf.py` | 单个 PDF 处理 |
+| `process_pdfs_batch.py` | 批量 PDF 处理 |
+| `scripts/import_content_list.py` | 数据导入数据库 |
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| IMAGE_NAME | character_search:latest | Docker 镜像名 |
+| DATABASE_URL | sqlite:///./data/characters.db | 数据库连接 |
+| LOG_LEVEL | INFO | 日志级别 |
