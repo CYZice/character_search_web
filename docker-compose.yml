@@ -1,5 +1,7 @@
 version: "3.8"
 
+name: character_search
+
 services:
   character_search:
     image: ${IMAGE_NAME:-character_search:latest}
