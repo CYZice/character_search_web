@@ -55,16 +55,18 @@ def import_from_output_v4():
     """V4 格式导入 - 处理 MinerU v4 API 返回的 JSON"""
     import glob
 
-    char_images = {}  # {char: [(image_path, source_text), ...]}
+    # {char: [(image_path, source_text, json_dir), ...]}
+    char_images = {}
     current_char = None
     pending_image = None
 
-    # 处理所有 *_content_list.json 文件
-    json_files = sorted(OUTPUT_DIR.glob("*_content_list.json"))
+    # 处理所有 *_content_list.json 文件（递归查找子目录）
+    json_files = sorted(OUTPUT_DIR.rglob("*_content_list.json"))
     print(f"找到 {len(json_files)} 个 JSON 文件")
 
     for json_file in json_files:
-        print(f"处理: {json_file.name}")
+        json_dir = json_file.parent
+        print(f"处理: {json_file.relative_to(OUTPUT_DIR)}")
         with open(json_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -89,12 +91,12 @@ def import_from_output_v4():
             elif block_type == "image" and current_char:
                 img_path = block.get("img_path", "")
                 if img_path:
-                    pending_image = (img_path, "")
+                    pending_image = (img_path, "", json_dir)
 
             elif block_type == "text" and block.get("text_level") is None and pending_image:
                 source = block.get("text", "").strip()
                 if source:
-                    pending_image = (pending_image[0], source)
+                    pending_image = (pending_image[0], source, pending_image[2])
                     if current_char:
                         char_images[current_char].append(pending_image)
                     pending_image = None
@@ -110,70 +112,75 @@ def import_from_output_v4():
 
 
 def import_from_output_v2():
-    """V2 格式导入 - 处理旧版 content_list_v2.json"""
-    json_path = OUTPUT_DIR / "content_list_v2.json"
-    if not json_path.exists():
-        print(f"JSON文件不存在: {json_path}")
+    """V2 格式导入 - 处理旧版 content_list_v2.json（递归查找子目录）"""
+    # 递归查找所有 content_list_v2.json 文件
+    json_files = sorted(OUTPUT_DIR.rglob("content_list_v2.json"))
+    if not json_files:
+        print(f"JSON文件不存在: {OUTPUT_DIR / 'content_list_v2.json'}")
         return None
 
-    # 读取JSON
-    print("读取JSON...")
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    flat_blocks = flatten(data)
-    print(f"共 {len(flat_blocks)} 个block")
-
     # 建立字-图对应关系
-    char_images = {}  # {char: [(image_path, source_text), ...]}
-    current_char = None
-    pending_image = None  # 暂存未处理出处的图片
+    char_images = {}  # {char: [(image_path, source_text, json_dir), ...]}
 
-    i = 0
-    while i < len(flat_blocks):
-        block = flat_blocks[i]
-        block_type = block.get("type", "")
+    for json_path in json_files:
+        json_dir = json_path.parent
+        print(f"处理: {json_path.relative_to(OUTPUT_DIR)}")
 
-        if block_type == "title":
-            content = block.get("content", {})
-            title_content = content.get("title_content", [])
-            for tc in title_content:
-                if tc.get("type") == "text":
-                    text = tc.get("content", "")
-                    if is_valid_char_title(text):
-                        current_char = text[1:-1]  # 去掉【】
-                        if current_char not in char_images:
-                            char_images[current_char] = []
-                        # 处理暂存的图片（上一个字的）
-                        if pending_image and current_char:
-                            char_images[current_char].append(pending_image)
-                            pending_image = None
-                    break
+        # 读取JSON
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-        elif block_type == "image" and current_char:
-            img_rel_path = block.get("content", {}).get("image_source", {}).get("path", "")
-            if img_rel_path:
-                pending_image = (img_rel_path, "")
+        flat_blocks = flatten(data)
+        print(f"  共 {len(flat_blocks)} 个block")
 
-        elif block_type == "paragraph" and pending_image:
-            para_content = block.get("content", {}).get("paragraph_content", [])
-            for p in para_content:
-                if p.get("type") == "text":
-                    source = p.get("content", "").strip()
-                    pending_image = (pending_image[0], source)
-                    break
-            # 图片属于当前字
-            if current_char and current_char in char_images:
-                char_images[current_char].append(pending_image)
-            pending_image = None
+        current_char = None
+        pending_image = None  # 暂存未处理出处的图片
 
-        i += 1
+        i = 0
+        while i < len(flat_blocks):
+            block = flat_blocks[i]
+            block_type = block.get("type", "")
 
-    # 处理最后一个暂存图片
-    if pending_image and current_char:
-        if current_char not in char_images:
-            char_images[current_char] = []
-        char_images[current_char].append(pending_image)
+            if block_type == "title":
+                content = block.get("content", {})
+                title_content = content.get("title_content", [])
+                for tc in title_content:
+                    if tc.get("type") == "text":
+                        text = tc.get("content", "")
+                        if is_valid_char_title(text):
+                            current_char = text[1:-1]  # 去掉【】
+                            if current_char not in char_images:
+                                char_images[current_char] = []
+                            # 处理暂存的图片（上一个字的）
+                            if pending_image and current_char:
+                                char_images[current_char].append(pending_image)
+                                pending_image = None
+                        break
+
+            elif block_type == "image" and current_char:
+                img_rel_path = block.get("content", {}).get("image_source", {}).get("path", "")
+                if img_rel_path:
+                    pending_image = (img_rel_path, "", json_dir)
+
+            elif block_type == "paragraph" and pending_image:
+                para_content = block.get("content", {}).get("paragraph_content", [])
+                for p in para_content:
+                    if p.get("type") == "text":
+                        source = p.get("content", "").strip()
+                        pending_image = (pending_image[0], source, pending_image[2])
+                        break
+                # 图片属于当前字
+                if current_char and current_char in char_images:
+                    char_images[current_char].append(pending_image)
+                pending_image = None
+
+            i += 1
+
+        # 处理最后一个暂存图片
+        if pending_image and current_char:
+            if current_char not in char_images:
+                char_images[current_char] = []
+            char_images[current_char].append(pending_image)
 
     print(f"找到 {len(char_images)} 个汉字")
     return char_images
@@ -189,7 +196,7 @@ def import_from_output():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     # 检测格式：优先使用 V4 格式（*_content_list.json 文件）
-    v4_files = list(OUTPUT_DIR.glob("*_content_list.json"))
+    v4_files = list(OUTPUT_DIR.rglob("*_content_list.json"))
     if v4_files:
         print("检测到 V4 格式 JSON，使用 V4 导入逻辑")
         char_images = import_from_output_v4()
@@ -207,6 +214,7 @@ def import_from_output():
         total_new_chars = 0
         total_new_images = 0
         total_skipped = 0
+        total_missing = 0
 
         for char, images in sorted(char_images.items()):
             # 获取或创建 Character 记录
@@ -227,15 +235,16 @@ def import_from_output():
             char_dir.mkdir(exist_ok=True)
 
             new_count = 0
-            for (img_rel_path, source) in images:
+            for (img_rel_path, source, json_dir) in images:
                 # 去重：检查该图片路径是否已存在
                 if img_rel_path in existing_paths:
                     total_skipped += 1
                     continue
 
-                # 源文件
-                src_path = OUTPUT_DIR / img_rel_path
+                # 源文件（图片路径相对于 JSON 文件所在目录）
+                src_path = json_dir / img_rel_path
                 if not src_path.exists():
+                    total_missing += 1
                     continue
 
                 # 目标文件命名: {字}_{出处}_{序号}.jpg
@@ -270,6 +279,7 @@ def import_from_output():
         print(f"新增汉字: {total_new_chars} 个")
         print(f"新增图片: {total_new_images} 张")
         print(f"跳过(已存在): {total_skipped} 张")
+        print(f"缺失(文件不存在): {total_missing} 张")
         print(f"数据目录: {DATA_DIR}")
 
     finally:
